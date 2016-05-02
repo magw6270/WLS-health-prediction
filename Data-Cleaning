@@ -1,0 +1,114 @@
+# R-mark down code for cleaning Wisconsin Longitudinal Survey data. 
+
+---
+title: "Data Cleaning"
+author: "Matthew Gentzel"
+date: "April 29, 2016"
+output: html_document
+---
+
+Load libraries and data
+```{r}
+library(RSQLite)
+library(MASS)
+library(dplyr)
+
+df = read.csv("C:/Users/Genzel/Desktop/Data Science/Final Projects/wls2011health.csv")
+view = View # short cut for View() function
+```
+
+Load codebook for reference
+```{r}
+sqlite <- dbDriver("SQLite")
+wlsdb <- dbConnect(sqlite, "C:/Users/Genzel/Desktop/Data Science/Final Projects/wisc-codebook.sqlite")
+
+questions = dbGetQuery(wlsdb, "select * from questions")
+answers = dbGetQuery(wlsdb, "select * from answers")
+
+# questions and answer data frames
+dfq = questions[questions$id %in% names(df),]
+dfa = answers[answers$qid %in% names(df),]
+```
+
+Data cleaning 
+```{r}
+facts = df[sapply(df, is.factor)]
+levs = sapply(facts, function(x){
+  levs1 = levels(x)
+  levs1 = levs1[-grep("proxy|refused|left|ascertained|inappropriate|don't know",levs1)]
+  paste(levs1, collapse = ",")
+})
+
+noYeses   = facts[levs == "no,yes"]                                                 # Select yes/no answer columns
+noYeses[] = lapply(noYeses, function(x){as.numeric(factor(x, c("no", "yes"))) - 1}) # converts yes to 1 and no to 0
+noYeses[] = lapply(noYeses, function(x){ifelse(is.na(x), median(x, na.rm = T), x)}) # sets NAs to column medians 
+```
+
+Search for irrelevant columns
+```{r}
+get_codes = function(dframe){
+  dfq[dfq$id %in% colnames(dframe),]
+}
+
+cdfq = get_codes(noYeses) # used to search for remaining columns to clear out
+```
+
+Removing irrelevant columns by code
+```{r}
+# health insurance codes: jxhi
+# doctor trust code: jxha88re
+# alcohol memory code: jxab05re
+cdf = noYeses[, -grep("jxhi|jxha88re|jxab05re", colnames(noYeses))]
+```
+
+Removing irrelevant columns by text 
+```{r}
+# Remove treatments, weight loss actions, meds, drinking, ER use,
+# internet use, smoking, family other than siblings, doctor
+# coordination, and willingness to donate organs
+rdfq = cdfq[grep("treatment|lose|medications|drink|emergency|Internet|smoke|father|mother|son|daughters|one doctor|don", cdfq$text),]
+cdf = cdf[,!(colnames(cdf) %in% rdfq$id)]
+cdfq = get_codes(cdf)
+```
+
+Shortening question text for quick readability and understanding
+```{r}
+text_dfq = cdfq
+
+# Fixed = True, removal
+text_dfq$text = gsub("?", "", text_dfq$text, fixed = T)
+text_dfq$text = gsub("(such as on TV or the radio, in the newspapers or by someone you know), do you ", "", text_dfq$text, fixed = T)
+
+# Replacement
+# It was most efficient to not use lapply or MAP and lists 
+# in order to be able to quickly check each replacement
+
+text_dfq$text = gsub("have you accomplished less than you would like with your", "less", text_dfq$text)
+text_dfq$text = gsub(" or other daily activities as a result of your physical health", "/activities due to poor health", text_dfq$text)
+text_dfq$text = gsub(" or other regular activities as a result of any emotional problems, such as feeling depressed or anxious", "/activities due to anxiety or depression", text_dfq$text)
+text_dfq$text = gsub(" or other activities you could do as a result of your physical health", "/activities due to poor health", text_dfq$text)
+text_dfq$text = gsub("than usual as a result of any emotional problems, such as feeling depressed or anxious", " due to anxiety or depression", text_dfq$text)
+text_dfq$text = gsub("conversations in person ", "people ", text_dfq$text)
+text_dfq$text = gsub("conversations on the phone ", "on phone ", text_dfq$text)
+text_dfq$text = gsub("with understanding spoken instructions from your doctor, employer or other person", "understanding people", text_dfq$text)
+text_dfq$text = gsub("with understanding written instructions", "understanding text", text_dfq$text)
+text_dfq$text = gsub("often worry about the possibility that you have a serious illness", "often worry that you may have a serious illness", text_dfq$text)
+text_dfq$text = gsub("a disease is brought to your attention", "made aware of disease", text_dfq$text)
+
+# Removal
+text_dfq$text = gsub("Do you have any |During the past 4 weeks, |Has a medical professional ever said that you have |Have you experienced increased |Have any of your biological |Do you |Are you |did you do |find that you are |Have you ever been told by a doctor or other health professional that you have |Have you had |yourself|and carrying something as heavy as |, such as a bag of groceries|, such as a bag of pet food|, such as a living room chair|or being on your feet |were you | or other activities|in the daytime when you have to struggle against falling asleep |on medicine bottles or other places|there is ", "", text_dfq$text)
+```
+
+Remove unnecessary columns from questions data
+```{r}
+text_dfq = text_dfq[,1:2]
+```
+
+
+Export files:
+```{r}
+sdf = cbind(df$ses57, cdf)
+
+write.csv(sdf, file = "C:/Users/Genzel/Desktop/Data Science/Final Projects/sdf", row.names = F)
+write.csv(text_dfq, file = "C:/Users/Genzel/Desktop/Data Science/Final Projects/text_dfq", row.names = F)
+```
