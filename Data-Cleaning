@@ -1,5 +1,4 @@
 # R-mark down code for cleaning Wisconsin Longitudinal Survey data. 
-
 ---
 title: "Data Cleaning"
 author: "Matthew Gentzel"
@@ -8,7 +7,7 @@ output: html_document
 ---
 
 Load libraries and data
-```{r}
+```{r, echo=FALSE}
 library(RSQLite)
 library(MASS)
 library(dplyr)
@@ -104,10 +103,10 @@ Remove unnecessary columns from questions data
 text_dfq = text_dfq[,1:2]
 ```
 
-
 Export files:
 ```{r}
 sdf = cbind(df$ses57, cdf)
+colnames(sdf)[1] = 'ses57'
 
 write.csv(sdf, file = "C:/Users/Genzel/Desktop/Data Science/Final Projects/sdf", row.names = F)
 write.csv(text_dfq, file = "C:/Users/Genzel/Desktop/Data Science/Final Projects/text_dfq", row.names = F)
