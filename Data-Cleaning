@@ -19,8 +19,8 @@ view = View # short cut for View() function
 
 Load codebook for reference
 ```{r}
-sqlite <- dbDriver("SQLite")
-wlsdb <- dbConnect(sqlite, "C:/Users/Genzel/Desktop/Data Science/Final Projects/wisc-codebook.sqlite")
+sqlite = dbDriver("SQLite")
+wlsdb  = dbConnect(sqlite, "C:/Users/Genzel/Desktop/Data Science/Final Projects/wisc-codebook.sqlite")
 
 questions = dbGetQuery(wlsdb, "select * from questions")
 answers = dbGetQuery(wlsdb, "select * from answers")
