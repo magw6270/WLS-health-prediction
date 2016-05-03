@@ -1,7 +1,9 @@
 # WLS-health-prediction
 Predicting health outcomes from earlier survey data. 
 
-In this project I search for correlations between parental socioeconomic status and health outcomes for their children. 
+In this project I search for correlations between parental socioeconomic status and health outcomes for their children. The outcomes that survived elastic net regularization are graphed and order by their regularized coefficients in this project. In future versions of this project I plan to:
+- make a table of t-tests for verifying the significance of predictor differences
+- test other models such as random forests, xgboost, and super learner 
 
 Data pulled from:
 
@@ -13,5 +15,5 @@ In an earlier version of this project, I sought to use SF-12 scores as a proxy f
 
 I believe the reason for the bias has something to do with Bayesian inference: if someone is in poor phyical condition but nevertheless has strong mental health, there is greater evidence that they are deeply mentally stable than someone who also has good health, but could become worse in terms of mental health if physical health were to decrease. Another posibility is that the designers of the scoring algorthim are activly trying to counter biases in responses: a person who ranks themselves as good in some things and bad at others is more likely to be telling the truth than someone who says they are good at everything or bad at everything. 
 
-The inability to use such a score to quantify general health lead me to the approach of instead using many heath outcomes as "predictors" for parental SES in prior years. The outcomes that survived elastic net regularization are graphed and order by their regularized coefficients in this project. 
+The inability to use such a score to quantify general health lead me to the approach of instead using many heath outcomes as "predictors" for parental SES in prior years. 
 
