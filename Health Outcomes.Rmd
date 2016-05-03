@@ -1,0 +1,126 @@
+---
+title: "Parental Socioeconomic Status and Health Outcomes of their Children"
+author: "Matthew Gentzel"
+date: "May 2, 2016"
+output: html_document
+---
+
+Load libraries and data
+```{r, echo=FALSE}
+library(ggplot2)
+library(MASS)
+library(glmnet)
+library(dplyr)
+library(corrplot)
+library(caret) 
+
+df  = read.csv("C:/Users/Genzel/Desktop/Data Science/Final Projects/sdf")
+dfq = read.csv("C:/Users/Genzel/Desktop/Data Science/Final Projects/text_dfq")
+
+view = View # short cut for View() function
+par(mai = c(1.25,1.25,1.25,0.42)) # set plot margins
+```
+
+Histogram of Socioeconomic Status
+```{r}
+qplot(df$ses57)
+# due to the right skew, a Box-Cox transformation will help normalize the data
+
+# Box cox transform
+bcs   = BoxCoxTrans(df$ses57)
+sesbc = predict(bcs, df$ses57)
+qplot(sesbc)
+# less skewed
+```
+
+Simple linear model:
+predicting parental socioeconomic status from health questions
+```{r}
+s_model = lm(ses57 ~ ., df)
+summary(s_model)
+# Adjusted R-squared:  0.04358
+
+ydf = cbind(sesbc, df)
+ydf = subset(ydf, select = -ses57)
+
+y_model = lm(sesbc ~ ., ydf)
+summary(y_model)
+# Adjusted R-squared: 0.05013 
+# Transform performs better: use ydf
+```
+
+L1 regularized model:
+Estimating parental socioeconomic status in 1957 
+from health outcomes in 2011
+```{r}
+ypreds = as.matrix(subset(ydf, select = -sesbc))
+
+# Lambda search function, repeated cross validation using glmnet
+rcvglmnet = function(lsearch, asearch, reps, preds, outcome){
+  grid    = expand.grid(lambda = lsearch, alpha = asearch)
+  Control = trainControl(method = "repeatedcv", repeats = reps, verboseIter = TRUE)
+  netFit  = train(x = preds, y = outcome,
+          method    = "glmnet",
+          tuneGrid  = grid,
+          trControl = Control)
+}
+
+# 50 to 200 repeats used to ensure stability in accordance with 
+# the book: Applied Predictive Modeling's recomendations
+# this enables stable/reproducible results without setting a seed
+
+# initial rough search
+netFit1 = rcvglmnet((1.05)^(-(0:100)),(0.2*(0:5)), 50, ypreds, ydf$sesbc)
+lambda1 = netFit1$bestTune$lambda
+alpha1  = netFit1$bestTune$alpha
+# Fitting alpha = 0.2, lambda = 0.062 on full training set
+
+# Final search  
+search2 = (log(lambda1)/log(1.05))-20 + (0:40)
+search2
+netFit2 = rcvglmnet((1.05)^(search2),(alpha1 - 0.2 + 0.05*(0:8)), 200, ypreds, ydf$sesbc)
+lambda2 = netFit2$bestTune$lambda
+alpha2  = netFit2$bestTune$alpha
+# The final values used for the model were alpha = 0.1 and lambda = 0.1168613 
+
+# predict SES
+elnetfit = glmnet(ypreds, ydf$sesbc, lambda = lambda2, alpha = alpha2)
+
+ypredictions = predict(elnetfit, newx = ypreds, s = lambda2)
+
+plot(ypredictions, ydf$sesbc)
+abline(0,1)
+
+ycoefs = coef(elnetfit, lambda2)
+ycoefdf = data.frame(as.matrix(ycoefs[ycoefs[,1] != 0,]))
+ycoefdf$index = 0:(nrow(ycoefdf)-1) # add column to prevent data corruption
+ycodf = ycoefdf[-1,]                # subtract intercept from the plot
+
+# Matches code to questions using dfq
+get_text = function(dframe){
+  dfq[dfq$id %in% row.names(dframe),]
+}
+
+ydfq = get_text(ycodf)
+ycodf$text = ydfq$text
+names(ycodf)[1] = 'SES_Coefficients'
+
+sycdf = ycodf[order(ycodf[,1], decreasing = FALSE),]
+sycdf$index = 1:nrow(sycdf)
+sycdf$code  = row.names(sycdf)
+
+plotdf = function(df, color1, color2, back, text_size, Coefficients, plot_title){
+  ggplot(df, aes(x = Coefficients, y = index, 
+                    colour = Coefficients)) +
+    geom_vline(xintercept = 0, colour = "gray 5") +
+    geom_point() +
+    geom_text(aes(label = text), angle = 0, size = text_size, hjust = "inward", vjust = 0.8) +
+    scale_color_gradient(low = color1, high = color2)+
+    ggtitle(plot_title) +
+    labs(y = "Coefficient order from smallest to largest") +
+    theme(panel.background = element_rect(fill = back, color = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank()) 
+}
+plotdf(sycdf, "red", "green", "grey 20", 4, sycdf$SES_Coefficients, "Socioeconomic Status Coefficient Plot")
+```
